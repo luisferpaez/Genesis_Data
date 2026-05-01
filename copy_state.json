@@ -1,1 +1,46 @@
-{"header": {"last_heartbeat": "2026.05.01 06:48:01", "status": "ACTIVE"}, "config": {"allow_new_trades": true}, "inventory": [{"master_ticket": 123526789, "symbol": "XAUUSD.sc", "type": "POSITION_TYPE_BUY", "vol": 0.08},{"master_ticket": 123526795, "symbol": "XAUUSD.sc", "type": "POSITION_TYPE_SELL", "vol": 0.08}]}
+void PushToGitHub(string json_content) {
+   string headers, result_headers;
+   char post[], result[];
+   string response;
+   
+   // 1. OBTENER EL SHA (La llave de seguridad de GitHub)
+   headers = "Authorization: token " + GitHub_Token + "\r\n";
+   // Hacemos un GET para ver el archivo actual y extraer su SHA
+   int res = WebRequest("GET", GitHub_Repo_URL, headers, 500, post, result, result_headers);
+   
+   string sha = "";
+   if(res == 200) {
+      response = CharArrayToString(result);
+      // Buscamos el valor de "sha":"..." en la respuesta
+      int sha_pos = StringFind(response, "\"sha\":\"");
+      if(sha_pos >= 0) {
+         sha = StringSubstr(response, sha_pos + 7, 40);
+      }
+   }
+
+   // 2. PREPARAR EL ENVÍO (PUT)
+   uchar data[];
+   StringToCharArray(json_content, data, 0, StringLen(json_content), CP_UTF8);
+   
+   // Codificación Base64 obligatoria para GitHub
+   uchar key[], base64_result[];
+   CryptEncode(CRYPT_BASE64, data, key, base64_result);
+   string base64_content = CharArrayToString(base64_result);
+   
+   // Construir el cuerpo del mensaje incluyendo el SHA que acabamos de obtener
+   string body = "{\"message\":\"MT5 Sync\",\"content\":\"" + base64_content + "\"";
+   if(sha != "") body += ",\"sha\":\"" + sha + "\"";
+   body += "}";
+   
+   StringToCharArray(body, post, 0, StringLen(body), CP_UTF8);
+   headers = "Authorization: token " + GitHub_Token + "\r\nContent-Type: application/json\r\n";
+   
+   // Enviamos la actualización definitiva
+   res = WebRequest("PUT", GitHub_Repo_URL, headers, 500, post, result, result_headers);
+   
+   if(res == 200 || res == 201) {
+      Print("GitHub: Sincronización exitosa (Archivo actualizado).");
+   } else {
+      Print("GitHub Error Crítico: ", res, " - ", CharArrayToString(result));
+   }
+}
